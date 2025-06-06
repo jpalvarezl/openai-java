@@ -36,6 +36,7 @@ private constructor(
     @get:JvmName("maxRetries") val maxRetries: Int,
     @get:JvmName("credential") val credential: Credential,
     @get:JvmName("azureServiceVersion") val azureServiceVersion: AzureOpenAIServiceVersion?,
+    @get:JvmName("modelInPath") val modelInPath: Boolean = false,
     private val organization: String?,
     private val project: String?,
 ) {
@@ -88,6 +89,7 @@ private constructor(
         private var azureServiceVersion: AzureOpenAIServiceVersion? = null
         private var organization: String? = null
         private var project: String? = null
+        private var modelInPath: Boolean = false
 
         @JvmSynthetic
         internal fun from(clientOptions: ClientOptions) = apply {
@@ -106,6 +108,7 @@ private constructor(
             azureServiceVersion = clientOptions.azureServiceVersion
             organization = clientOptions.organization
             project = clientOptions.project
+            modelInPath = clientOptions.modelInPath
         }
 
         fun httpClient(httpClient: HttpClient) = apply { this.httpClient = httpClient }
@@ -258,6 +261,8 @@ private constructor(
             }
         }
 
+        fun modelInPath(modelInPath: Boolean) = apply { this.modelInPath = modelInPath }
+
         /**
          * Returns an immutable instance of [ClientOptions].
          *
@@ -299,13 +304,10 @@ private constructor(
                 }
             }
 
-            if (isAzureEndpoint(baseUrl)) {
-                // Default Azure OpenAI version is used if Azure user doesn't
-                // specific a service API version in 'queryParams'.
-                replaceQueryParams(
-                    "api-version",
-                    (azureServiceVersion ?: AzureOpenAIServiceVersion.latestStableVersion()).value,
-                )
+            // Newer Azure services will assume latest version automatically. If the user is trying to hit an older version,
+            // not supporting this feature, they will get a 404.
+            azureServiceVersion?.let {
+                replaceQueryParams("api-version", it.value)
             }
 
             headers.replaceAll(this.headers.build())
@@ -346,6 +348,7 @@ private constructor(
                 maxRetries,
                 credential,
                 azureServiceVersion,
+                modelInPath,
                 organization,
                 project,
             )

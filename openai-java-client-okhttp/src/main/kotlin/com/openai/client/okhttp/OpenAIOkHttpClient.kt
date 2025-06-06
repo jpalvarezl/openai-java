@@ -178,6 +178,10 @@ class OpenAIOkHttpClient private constructor() {
 
         fun fromEnv() = apply { clientOptions.fromEnv() }
 
+        fun modelInPath(modelInPath: Boolean) = apply {
+            clientOptions.modelInPath(modelInPath)
+        }
+
         /**
          * Returns an immutable instance of [OpenAIClient].
          *
