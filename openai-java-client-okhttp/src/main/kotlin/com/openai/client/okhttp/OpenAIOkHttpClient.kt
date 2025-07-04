@@ -186,6 +186,10 @@ class OpenAIOkHttpClient private constructor() {
 
         fun fromEnv() = apply { clientOptions.fromEnv() }
 
+        fun unifiedAzureRoutes(unifiedAzureRoutes: Boolean) = apply {
+            clientOptions.unifiedAzureRoutes(unifiedAzureRoutes)
+        }
+
         /**
          * Returns an immutable instance of [OpenAIClient].
          *

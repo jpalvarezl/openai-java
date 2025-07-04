@@ -36,6 +36,7 @@ private constructor(
     @get:JvmName("maxRetries") val maxRetries: Int,
     @get:JvmName("credential") val credential: Credential,
     @get:JvmName("azureServiceVersion") val azureServiceVersion: AzureOpenAIServiceVersion?,
+    @get:JvmName("unifiedAzureRoutes") val unifiedAzureRoutes: Boolean = true,
     private val organization: String?,
     private val project: String?,
     private val webhookSecret: String?,
@@ -94,6 +95,7 @@ private constructor(
         private var organization: String? = null
         private var project: String? = null
         private var webhookSecret: String? = null
+        private var unifiedAzureRoutes: Boolean = true
 
         @JvmSynthetic
         internal fun from(clientOptions: ClientOptions) = apply {
@@ -113,6 +115,7 @@ private constructor(
             organization = clientOptions.organization
             project = clientOptions.project
             webhookSecret = clientOptions.webhookSecret
+            unifiedAzureRoutes = clientOptions.unifiedAzureRoutes
         }
 
         fun httpClient(httpClient: HttpClient) = apply {
@@ -279,6 +282,8 @@ private constructor(
             }
         }
 
+        fun unifiedAzureRoutes(unifiedAzureRoutes: Boolean) = apply { this.unifiedAzureRoutes = unifiedAzureRoutes }
+
         /**
          * Returns an immutable instance of [ClientOptions].
          *
@@ -322,13 +327,19 @@ private constructor(
 
             baseUrl?.let {
                 if (isAzureEndpoint(it)) {
-                    // Default Azure OpenAI version is used if Azure user doesn't
-                    // specific a service API version in 'queryParams'.
-                    replaceQueryParams(
-                        "api-version",
-                        (azureServiceVersion ?: AzureOpenAIServiceVersion.latestStableVersion())
-                            .value,
-                    )
+                    // Non Azure-unified routes will still require an api-version value.
+                    if (!unifiedAzureRoutes || !isAzureUnifiedEndpoint(it)) {
+                        replaceQueryParams(
+                            "api-version",
+                            (azureServiceVersion ?: AzureOpenAIServiceVersion.latestStableVersion())
+                                .value,
+                        )
+                    } else {
+                        // We only add the value if it's defined by the user for unified Azure routes.
+                        azureServiceVersion?.let { version ->
+                            replaceQueryParams("api-version", version.value)
+                        }
+                    }
                 }
             }
 
@@ -368,6 +379,7 @@ private constructor(
                 maxRetries,
                 credential,
                 azureServiceVersion,
+                unifiedAzureRoutes,
                 organization,
                 project,
                 webhookSecret,

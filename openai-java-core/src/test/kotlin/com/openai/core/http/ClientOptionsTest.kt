@@ -65,4 +65,27 @@ internal class ClientOptionsTest {
             .isInstanceOf(IllegalArgumentException::class.java)
             .hasMessage("Azure API key cannot be empty.")
     }
+
+    @Test
+    fun unifiedAzureRoutesTestSetFalse() {
+        val clientOptions =
+            ClientOptions.builder()
+                .httpClient(createOkHttpClient())
+                .credential(BearerTokenCredential.create(FAKE_API_KEY))
+                .unifiedAzureRoutes(false)
+                .build()
+
+        assertThat(clientOptions.unifiedAzureRoutes).isFalse()
+    }
+
+    @Test
+    fun unifiedAzureRoutesTestDefaultTrue() {
+        val clientOptions =
+            ClientOptions.builder()
+                .httpClient(createOkHttpClient())
+                .credential(BearerTokenCredential.create(FAKE_API_KEY))
+                .build()
+
+        assertThat(clientOptions.unifiedAzureRoutes).isTrue()
+    }
 }
