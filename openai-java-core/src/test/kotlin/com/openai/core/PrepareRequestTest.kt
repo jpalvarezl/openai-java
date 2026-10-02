@@ -70,7 +70,7 @@ internal class PrepareRequestTest {
             assertThat(future.isDone).isFalse()
             releaseCredential.countDown()
             assertThat(future.get(5, TimeUnit.SECONDS).headers.values("Authorization"))
-                .containsExactly("******")
+                .containsExactly("Bearer test-token")
         } finally {
             releaseCredential.countDown()
         }
