@@ -52,13 +52,7 @@ internal fun HttpRequest.prepareAsync(
     params: Params,
     security: SecurityOptions = SecurityOptions.all(),
 ): CompletableFuture<HttpRequest> =
-    try {
-        CompletableFuture.completedFuture(prepare(clientOptions, params, security))
-    } catch (failure: InvalidResourceIdException) {
-        // Deliver the new validation error through the future while preserving the existing
-        // synchronous behavior of unrelated preparation failures. Compatible with Java 8.
-        CompletableFuture<HttpRequest>().apply { completeExceptionally(failure) }
-    }
+    CompletableFuture.supplyAsync { prepare(clientOptions, params, security) }
 
 @JvmSynthetic
 internal fun Params.modelNameOrNull(): String? {

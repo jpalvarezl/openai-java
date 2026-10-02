@@ -1,7 +1,11 @@
 package com.openai.core
 
 import com.openai.core.http.Headers
+import com.openai.core.http.HttpClient
+import com.openai.core.http.HttpMethod
+import com.openai.core.http.HttpRequest
 import com.openai.core.http.QueryParams
+import com.openai.credential.BearerTokenCredential
 import com.openai.models.ChatModel
 import com.openai.models.ResponsesModel
 import com.openai.models.chat.completions.ChatCompletionListParams
@@ -9,11 +13,87 @@ import com.openai.models.embeddings.EmbeddingCreateParams
 import com.openai.models.embeddings.EmbeddingModel
 import com.openai.models.responses.ResponseCreateParams
 import com.openai.models.uploads.UploadCancelParams
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.ExecutionException
+import java.util.concurrent.TimeUnit
+import java.util.function.Supplier
 import org.assertj.core.api.Assertions.assertThat
 import org.assertj.core.api.Assertions.assertThatNoException
 import org.junit.jupiter.api.Test
+import org.junit.jupiter.api.assertDoesNotThrow
+import org.junit.jupiter.api.assertThrows
+import org.mockito.kotlin.mock
 
 internal class PrepareRequestTest {
+    private val params =
+        object : Params {
+            override fun _headers(): Headers = Headers.builder().build()
+
+            override fun _queryParams(): QueryParams = QueryParams.builder().build()
+        }
+
+    @Test
+    fun prepareAsyncDoesNotResolveCredentialsOnCallerThread() {
+        val callerThread = Thread.currentThread()
+        val credentialStarted = CountDownLatch(1)
+        val releaseCredential = CountDownLatch(1)
+        val options =
+            ClientOptions.builder()
+                .httpClient(mock<HttpClient>())
+                .credential(
+                    BearerTokenCredential.create(
+                        Supplier {
+                            check(Thread.currentThread() !== callerThread) {
+                                "Blocking is forbidden on the caller thread"
+                            }
+                            credentialStarted.countDown()
+                            check(releaseCredential.await(5, TimeUnit.SECONDS)) {
+                                "Timed out waiting to release credential"
+                            }
+                            "test-token"
+                        }
+                    )
+                )
+                .build()
+
+        try {
+            val future = assertDoesNotThrow {
+                request()
+                    .prepareAsync(
+                        options,
+                        params,
+                        SecurityOptions.builder().bearerAuth(true).build(),
+                    )
+            }
+
+            assertThat(credentialStarted.await(5, TimeUnit.SECONDS)).isTrue()
+            assertThat(future.isDone).isFalse()
+            releaseCredential.countDown()
+            assertThat(future.get(5, TimeUnit.SECONDS).headers.values("Authorization"))
+                .containsExactly("******")
+        } finally {
+            releaseCredential.countDown()
+        }
+    }
+
+    @Test
+    fun prepareAsyncDeliversCredentialFailuresThroughFuture() {
+        val failure = IllegalStateException("credential failed")
+        val options =
+            ClientOptions.builder()
+                .httpClient(mock<HttpClient>())
+                .credential(BearerTokenCredential.create(Supplier { throw failure }))
+                .build()
+
+        val future = assertDoesNotThrow {
+            request()
+                .prepareAsync(options, params, SecurityOptions.builder().bearerAuth(true).build())
+        }
+
+        assertThat(assertThrows<ExecutionException> { future.get(5, TimeUnit.SECONDS) }.cause)
+            .isSameAs(failure)
+    }
+
     @Test
     fun noModelFunction() {
         val params = UploadCancelParams.builder().uploadId("my-upload-id").build()
@@ -166,4 +246,7 @@ internal class PrepareRequestTest {
             assertThat(params.modelNameOrNull()).isNull()
         }
     }
+
+    private fun request(): HttpRequest =
+        HttpRequest.builder().method(HttpMethod.GET).baseUrl("https://example.test").build()
 }
